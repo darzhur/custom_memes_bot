@@ -12,7 +12,7 @@ TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 API_KEY = os.getenv("PROXYAPI_KEY")
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-MCP_URL = "http://127.0.0.1:8000/memes"
+MCP_URL = "https://memepedia-nwyn.onrender.com/memes"
 
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 

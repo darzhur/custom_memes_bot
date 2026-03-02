@@ -1,8 +1,0 @@
-{
-  "servers": {
-    "memepedia": {
-      "command": "python",
-      "args": ["memepedia_mcp.py"]
-    }
-  }
-}
