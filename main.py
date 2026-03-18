@@ -1,12 +1,17 @@
+# main.py
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from telegram import Update
 import os
 from dotenv import load_dotenv
 from io import BytesIO
 import aiohttp
+from aiohttp import FormData
 import httpx
 from datetime import datetime
 from supabase.client import AsyncClient
+import requests
+from PIL import Image
+from context import build_context
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -35,129 +40,182 @@ API_KEY = os.getenv("PROXYAPI_KEY")
 #             print("Ошибка MCP:", e)
 #     return "Не удалось получить мемы"
 
-async def fetch_memes(limit: int = 10):
-    """Получаем последние мемы из таблицы memepedia"""
+async def fetch_good_memes(limit: int = 5):
     try:
-        resp = await supabase.table("memepedia")\
-            .select("title, content")\
-            .order("created_at", desc=True)\
+        resp = await supabase.table("good_memes")\
+            .select("caption, tags")\
+            .order("score", desc=True)\
             .limit(limit)\
             .execute()
-        if resp.data:
-            return "\n".join([f"{m['title']} - {m.get('content','')}" for m in resp.data])
-        else:
-            return "Нет мемов в базе"
-    except Exception as e:
-        print("Ошибка Supabase:", e)
-        return "Не удалось получить мемы"
 
+        if not resp.data:
+            return []
+
+        return resp.data
+
+    except Exception as e:
+        print("Ошибка получения good_memes:", e)
+        return []
+
+
+def build_meme_context(memes):
+    lines = []
+    for i, m in enumerate(memes, 1):
+        caption = m.get("caption", "").strip()
+        tags = m.get("tags", "")
+
+        caption = caption[:120]  # ограничение токенов
+
+        lines.append(f"{i}. {caption} ({tags})")
+
+    return "\n".join(lines)
+
+# async def fetch_memes(limit: int = 10):
+#     """Получаем последние мемы из таблицы memepedia"""
+#     try:
+#         resp = await supabase.table("memepedia")\
+#             .select("title, content")\
+#             .order("created_at", desc=True)\
+#             .limit(limit)\
+#             .execute()
+#         if resp.data:
+#             return "\n".join([f"{m['title']} - {m.get('content','')}" for m in resp.data])
+#         else:
+#             return "Нет мемов в базе"
+#     except Exception as e:
+#         print("Ошибка Supabase:", e)
+#         return "Не удалось получить мемы"
+
+# main.py → заменить ВСЮ функцию handle_photo
 
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
         await update.message.reply_text("Это не фото 😅")
         return
 
-    # --- Получаем фото ---
-    file = await update.message.photo[-1].get_file()
-    bio = BytesIO()
-    await file.download_to_memory(out=bio)
-    bio.seek(0)
+    try:
+        # --- Получаем файл из Telegram ---
+        file = await update.message.photo[-1].get_file()
 
-    # --- Загружаем на Catbox ---
-    async with aiohttp.ClientSession() as session:
-        data = aiohttp.FormData()
-        data.add_field("reqtype", "fileupload")
-        data.add_field("fileToUpload", bio, filename="image.jpg", content_type="image/jpeg")
-        try:
-            async with session.post("https://catbox.moe/user/api.php", data=data) as resp:
-                image_url = await resp.text()
-        except Exception as e:
-            await update.message.reply_text("Ошибка при загрузке на Catbox 😅")
-            print(e)
-            return
+        # --- Скачиваем в память ---
+        from io import BytesIO
+        import base64
+        from PIL import Image
 
-    if not image_url.startswith("http"):
-        await update.message.reply_text("Не удалось загрузить фото на Catbox 😅")
-        print("Catbox ответил:", image_url)
-        return
+        bio = BytesIO()
+        await file.download_to_memory(out=bio)
+        bio.seek(0)
 
-    await update.message.reply_text(f"Фото загружено: {image_url}")
+        # --- Определяем формат изображения ---
+        img = Image.open(bio)
+        img_format = img.format.lower() if img.format else "jpeg"
 
-    # --- Получаем контекст мемов ---
-    mcp_context = await fetch_memes()
-    print("Контекст MCP:", mcp_context[:500])
+        # --- Кодируем в base64 ---
+        image_base64 = base64.b64encode(bio.getvalue()).decode()
 
-    # --- ProxyAPI ---
-    payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": f"Ты — генератор мемов на русском языке: на основе загруженного пользователем изображения и переданной информации о свежих мемах и трендах придумай 3 варианта подписи (каждый с новой строки, пронумерованные 1, 2, 3), не более 1–2 предложений каждый, коротко, лаконично, в стиле черный юмор, саркастично, дерзко, пошло (без графических описаний и нарушений правил), без эмодзи, без объяснений и без вступлений, обязательно учитывая детали изображения и актуальный мемный контекст.\n{mcp_context}"},
-                    {"type": "image_url", "image_url": {"url": image_url}}
-                ]
-            }
-        ],
-        "max_tokens": 300
-    }
+        image_data_url = f"data:image/{img_format};base64,{image_base64}"
 
-    headers = {
-        "Authorization": f"Bearer {API_KEY}",
-        "Content-Type": "application/json"
-    }
+        print("Image prepared, size:", len(image_base64))
 
-    async with aiohttp.ClientSession() as session:
-        try:
+        # --- Контекст мемов ---
+        meme_context = await build_context(supabase)  # возвращает готовую строку
+        # больше не нужен build_meme_context(good_memes)
+        # fallback на случай пустого контекста
+        if not meme_context:
+            meme_context = "сарказм, черный юмор, дерзко"
+
+        print("Контекст мемов:", meme_context)
+        
+        # --- Запрос в ProxyAPI ---
+        payload = {
+            "model": "gpt-4o-mini",
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": f"""
+Ты пишешь подписи к мемам.
+
+Стиль:
+- сарказм
+- черный юмор
+- дерзко
+- коротко (1 предложение)
+
+Примеры:
+{meme_context}
+
+Сделай 3 подписи (1,2,3).
+"""
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": image_data_url
+                            }
+                        }
+                    ]
+                }
+            ],
+            "max_tokens": 300
+        }
+
+        headers = {
+            "Authorization": f"Bearer {API_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        import aiohttp
+
+        async with aiohttp.ClientSession() as session:
             async with session.post(
                 "https://api.proxyapi.ru/openai/v1/chat/completions",
                 json=payload,
                 headers=headers
             ) as resp:
+                status = resp.status
+                text = await resp.text()
+
+                print("ProxyAPI status:", status)
+                print("ProxyAPI response:", text[:500])
+
+                if status != 200:
+                    await update.message.reply_text("Ошибка генерации 😅")
+                    return
+
                 result = await resp.json()
-        except Exception as e:
-            await update.message.reply_text("Ошибка ProxyAPI 😅")
-            print(e)
-            return
 
-    # --- Безопасно извлекаем подписи ---
-    captions_list = []
-    choices = result.get("choices")
-    if choices and isinstance(choices, list):
-        message_content = choices[0].get("message", {}).get("content")
-        if isinstance(message_content, str):
-            captions_list = [c for c in message_content.split("\n") if c.strip()]
-        elif isinstance(message_content, list):
-            captions_list = [c.get("text", "") for c in message_content if c.get("text")]
-    if not captions_list:
-        captions_list = ["Не удалось сгенерировать подпись 😅"]
+        # --- Извлекаем подписи ---
+        captions_list = []
+        choices = result.get("choices")
 
-    # --- Отправляем в Telegram ---
-    for caption in captions_list:
-        await update.message.reply_text(caption)
+        if choices:
+            content = choices[0].get("message", {}).get("content", "")
+            captions_list = [c.strip() for c in content.split("\n") if c.strip()]
 
-    # # --- Сохраняем в Supabase ---
-    # try:
-    #     for caption in captions_list:
-    #         supabase.table("memes").insert({
-    #             "image_url": image_url,
-    #             "caption": caption
-    #         }).execute()
-    # except Exception as e:
-    #     print("Ошибка сохранения в Supabase:", e)
+        if not captions_list:
+            captions_list = ["Не удалось сгенерировать подпись 😅"]
 
-    # --- Сохраняем придуманное в generated_memes ---
-    # Берём первые 3 подписи
-    c1, c2, c3 = (captions_list + ["", "", ""])[:3]
+        # --- Отправляем пользователю ---
+        for caption in captions_list:
+            await update.message.reply_text(caption)
 
-    await supabase.table("generated_memes").insert({
-        "title": "Мем с подписью",
-        "image_url": image_url,
-        "caption1": c1,
-        "caption2": c2,
-        "caption3": c3
-    }).execute()
+        # --- Сохраняем в Supabase ---
+        c1, c2, c3 = (captions_list + ["", "", ""])[:3]
 
+        await supabase.table("generated_memes").insert({
+            "title": "Мем с подписью",
+            "image_url": "base64_embedded",
+            "caption1": c1,
+            "caption2": c2,
+            "caption3": c3
+        }).execute()
+
+    except Exception as e:
+        print("ERROR:", e)
+        await update.message.reply_text("Что-то сломалось 😅")
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
