@@ -1,6 +1,0 @@
-requests
-python-telegram-bot
-beautifulsoup4
-supabase
-python-dotenv
-aiohttp
