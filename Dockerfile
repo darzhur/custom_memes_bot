@@ -1,16 +1,17 @@
-# Dockerfile
 FROM python:3.10
 
 WORKDIR /app
-
-# Копируем проект
 COPY . .
 
-# Обновляем pip
-RUN pip install --upgrade pip
+# Устанавливаем необходимые библиотеки для сборки aiohttp
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    libffi-dev \
+    python3-dev \
+    gcc \
+ && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем зависимости
+RUN pip install --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Команда запуска бота
-CMD ["python", "main.py"]
+CMD ["python", "bot.py"]
