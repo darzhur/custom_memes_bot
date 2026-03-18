@@ -1,6 +1,5 @@
 .DS_Store
 .env
+__pycache__/
 meme_bot_env/
 meme_bot_env_311/
-__pycache__/
-*.pyc
