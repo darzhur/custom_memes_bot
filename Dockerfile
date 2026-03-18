@@ -1,17 +1,12 @@
-# Dockerfile
-FROM python:3.11-slim
+FROM python:3.11
 
-# Рабочая директория
 WORKDIR /app
-
-# Копируем файлы проекта
 COPY . .
+
+# Обновляем pip
+RUN pip install --upgrade pip
 
 # Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Экспорт переменных окружения (если нужно)
-# ENV TOKEN=твой_токен
-
-# Команда запуска
-CMD ["python", "main.py"]
+CMD ["python", "bot.py"]
