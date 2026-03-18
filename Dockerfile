@@ -1,6 +1,9 @@
-FROM python:3.11
+# Dockerfile
+FROM python:3.10
 
 WORKDIR /app
+
+# Копируем проект
 COPY . .
 
 # Обновляем pip
@@ -9,4 +12,5 @@ RUN pip install --upgrade pip
 # Устанавливаем зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
-CMD ["python", "bot.py"]
+# Команда запуска бота
+CMD ["python", "main.py"]
