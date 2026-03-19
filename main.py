@@ -26,6 +26,10 @@ API_KEY = os.getenv("PROXYAPI_KEY")
 # test
 # MCP_URL = "http://127.0.0.1:8000/memes"
 
+from telegram import Bot
+bot = Bot(token=TELEGRAM_TOKEN)
+bot.delete_webhook()  # снимаем возможный webhook
+updates = bot.get_updates(offset=-1)  # сбрасываем очередь
 
 # async def fetch_memes():
 #     """Получаем текст последних мемов с MCP"""
