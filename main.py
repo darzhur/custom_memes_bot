@@ -8,7 +8,6 @@ import aiohttp
 from aiohttp import FormData
 import httpx
 from datetime import datetime
-import requests
 from PIL import Image
 from context import build_context
 
