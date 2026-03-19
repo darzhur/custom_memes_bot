@@ -231,12 +231,15 @@ def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-    # безопасный сброс webhook
-    import asyncio
-    asyncio.run(app.bot.delete_webhook(drop_pending_updates=True))
+    # --- безопасный сброс webhook ---
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    loop.run_until_complete(app.bot.delete_webhook(drop_pending_updates=True))
+    loop.close()
 
     print("Бот запущен (polling)")
 
+    # --- запускаем polling (он сам создаёт loop внутри) ---
     app.run_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES
