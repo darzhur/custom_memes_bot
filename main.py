@@ -119,21 +119,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ----------------------------
 # Основная функция
 # ----------------------------
-def main():
+async def main_async():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-    # Сбрасываем webhook синхронно через loop PTB
-    app.bot.loop.run_until_complete(reset_webhook())
+    # сброс webhook
+    await reset_webhook()
 
     print("Бот запущен (polling)")
-    app.run_polling(
+    await app.run_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES
     )
 
-# ----------------------------
-# Точка входа
-# ----------------------------
 if __name__ == "__main__":
-    main()
+    import nest_asyncio
+    nest_asyncio.apply()  # разрешаем повторное использование loop в Docker/Jupyter
+    asyncio.run(main_async())
