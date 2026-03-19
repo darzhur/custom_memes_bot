@@ -227,21 +227,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         traceback.print_exc()
         await update.message.reply_text("Что-то сломалось 😅")  
 
-async def main():
+def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-    # --- Сброс webhook ПРАВИЛЬНО ---
-    await app.bot.delete_webhook(drop_pending_updates=True)
+    # безопасный сброс webhook
+    import asyncio
+    asyncio.run(app.bot.delete_webhook(drop_pending_updates=True))
 
     print("Бот запущен (polling)")
 
-    await app.run_polling(
+    app.run_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES
     )
 
-import asyncio
-
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
