@@ -3,7 +3,6 @@ import os
 from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from telegram import Update, Bot
-import asyncio
 from supabase import create_client, Client
 from context import build_context
 from io import BytesIO
@@ -112,23 +111,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "caption3": c3
         }).execute()
 
-    except Exception as e:
+    except Exception:
         print("ERROR in handle_photo:")
         traceback.print_exc()
         await update.message.reply_text("Что-то сломалось 😅")
 
 # ----------------------------
-# Основная асинхронная функция
+# Основная функция
 # ----------------------------
-async def main_async():
-    # Сброс webhook
-    await reset_webhook()
-
+def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
+    # Сбрасываем webhook синхронно через loop PTB
+    app.bot.loop.run_until_complete(reset_webhook())
+
     print("Бот запущен (polling)")
-    await app.run_polling(
+    app.run_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES
     )
@@ -137,4 +136,4 @@ async def main_async():
 # Точка входа
 # ----------------------------
 if __name__ == "__main__":
-    asyncio.run(main_async())
+    main()
