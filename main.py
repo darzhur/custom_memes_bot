@@ -11,7 +11,6 @@ from datetime import datetime
 from PIL import Image
 from context import build_context
 import traceback
-from aiohttp import web
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -224,17 +223,11 @@ def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
-    WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # публичный HTTPS URL
-    PORT = int(os.getenv("PORT", 8000))
-
-    print("Бот запущен на webhook:", WEBHOOK_URL)
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=PORT,
-        url_path=TELEGRAM_TOKEN,
-        webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}"
+    print("Бот запущен (polling)")
+    app.run_polling(
+        drop_pending_updates=True,
+        allowed_updates=Update.ALL_TYPES
     )
-
 
 if __name__ == "__main__":
     main()
