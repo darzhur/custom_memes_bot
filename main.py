@@ -118,7 +118,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("Image prepared, size:", len(image_base64))
 
         # --- Контекст мемов ---
-        meme_context = await build_context(supabase)  # возвращает готовую строку
+        meme_context = build_context(supabase)  # возвращает готовую строку
         # больше не нужен build_meme_context(good_memes)
         # fallback на случай пустого контекста
         if not meme_context:
