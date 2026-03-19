@@ -214,8 +214,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }).execute()
 
     except Exception as e:
-        print("ERROR:", e)
-        await update.message.reply_text("Что-то сломалось 😅")
+        # --- Логируем полную ошибку ---
+        print("ERROR in handle_photo:")
+        traceback.print_exc()
+        await update.message.reply_text("Что-то сломалось 😅")  
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
