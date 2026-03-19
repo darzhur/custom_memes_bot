@@ -11,6 +11,7 @@ from datetime import datetime
 from PIL import Image
 from context import build_context
 import traceback
+from aiohttp import web
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -25,11 +26,6 @@ API_KEY = os.getenv("PROXYAPI_KEY")
 # MCP_URL = "https://memepedia-nwyn.onrender.com/memes"
 # test
 # MCP_URL = "http://127.0.0.1:8000/memes"
-
-from telegram import Bot
-bot = Bot(token=TELEGRAM_TOKEN)
-bot.delete_webhook()  # снимаем возможный webhook
-updates = bot.get_updates(offset=-1)  # сбрасываем очередь
 
 # async def fetch_memes():
 #     """Получаем текст последних мемов с MCP"""
@@ -123,7 +119,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print("Image prepared, size:", len(image_base64))
 
         # --- Контекст мемов ---
-        meme_context = build_context(supabase)  # возвращает готовую строку
+        meme_context = await build_context(supabase)  # возвращает готовую строку
         # больше не нужен build_meme_context(good_memes)
         # fallback на случай пустого контекста
         if not meme_context:
@@ -227,8 +223,17 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
-    print("Бот запущен")
-    app.run_polling(drop_pending_updates=False)
+
+    WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # публичный HTTPS URL
+    PORT = int(os.getenv("PORT", 8000))
+
+    print("Бот запущен на webhook:", WEBHOOK_URL)
+    app.run_webhook(
+        listen="0.0.0.0",
+        port=PORT,
+        url_path=TELEGRAM_TOKEN,
+        webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}"
+    )
 
 
 if __name__ == "__main__":
