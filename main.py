@@ -8,7 +8,6 @@ import aiohttp
 from aiohttp import FormData
 import httpx
 from datetime import datetime
-from supabase.client import AsyncClient
 import requests
 from PIL import Image
 from context import build_context
@@ -17,7 +16,12 @@ load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-supabase = AsyncClient(SUPABASE_URL, SUPABASE_KEY)
+from supabase import create_client, Client
+
+url = "SUPABASE_URL"
+key = "SUPABASE_KEY"
+
+supabase: Client = create_client(url, key)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 API_KEY = os.getenv("PROXYAPI_KEY")
