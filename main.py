@@ -42,7 +42,7 @@ API_KEY = os.getenv("PROXYAPI_KEY")
 
 async def fetch_good_memes(limit: int = 5):
     try:
-        resp = await supabase.table("good_memes")\
+        resp = supabase.table("good_memes")\
             .select("caption, tags")\
             .order("score", desc=True)\
             .limit(limit)\
@@ -57,6 +57,14 @@ async def fetch_good_memes(limit: int = 5):
         print("Ошибка получения good_memes:", e)
         return []
 
+from telegram import Bot
+import asyncio
+
+async def reset():
+    bot = Bot(token=TELEGRAM_TOKEN)
+    await bot.delete_webhook(drop_pending_updates=True)
+
+asyncio.run(reset())
 
 def build_meme_context(memes):
     lines = []
@@ -205,7 +213,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # --- Сохраняем в Supabase ---
         c1, c2, c3 = (captions_list + ["", "", ""])[:3]
 
-        await supabase.table("generated_memes").insert({
+        supabase.table("generated_memes").insert({
             "title": "Мем с подписью",
             "image_url": "base64_embedded",
             "caption1": c1,
@@ -219,15 +227,21 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         traceback.print_exc()
         await update.message.reply_text("Что-то сломалось 😅")  
 
-def main():
+async def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
+    # --- Сброс webhook ПРАВИЛЬНО ---
+    await app.bot.delete_webhook(drop_pending_updates=True)
+
     print("Бот запущен (polling)")
-    app.run_polling(
+
+    await app.run_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES
     )
 
+import asyncio
+
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
