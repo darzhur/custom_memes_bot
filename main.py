@@ -4,13 +4,13 @@ from dotenv import load_dotenv
 from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
 from telegram import Update, Bot
 from supabase import create_client, Client
-from context import build_context
 from io import BytesIO
 from PIL import Image
 import base64
 import aiohttp
 import traceback
 import asyncio
+import random
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -26,6 +26,25 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 async def reset_webhook():
     bot = Bot(token=TELEGRAM_TOKEN)
     await bot.delete_webhook(drop_pending_updates=True)
+
+# ----------------------------
+# Получаем случайные мемы из memepedia
+# ----------------------------
+async def fetch_random_memes(limit=5):
+    try:
+        resp = await supabase.table("memepedia").select("title, content").execute()
+        all_memes = resp.data or []
+        return random.sample(all_memes, min(limit, len(all_memes)))
+    except Exception as e:
+        print("Ошибка fetch_random_memes:", e)
+        return []
+
+async def build_random_context():
+    memes = await fetch_random_memes(limit=5)
+    lines = [f"{i+1}. {m.get('title','')} - {m.get('content','')}" for i, m in enumerate(memes)]
+    if not lines:
+        lines = ["сарказм, черный юмор, дерзко"]
+    return "\n".join(lines)
 
 # ----------------------------
 # Функция обработки фото
@@ -45,9 +64,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         image_base64 = base64.b64encode(bio.getvalue()).decode()
         image_data_url = f"data:image/{img_format};base64,{image_base64}"
 
-        meme_context = build_context(supabase)
-        if not meme_context:
-            meme_context = "сарказм, черный юмор, дерзко"
+        # --- Контекст мемов из случайных записей ---
+        meme_context = await build_random_context()
 
         payload = {
             "model": "gpt-4o-mini",
@@ -104,7 +122,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(caption)
 
         c1, c2, c3 = (captions_list + ["", "", ""])[:3]
-        supabase.table("generated_memes").insert({
+        await supabase.table("generated_memes").insert({
             "title": "Мем с подписью",
             "image_url": "base64_embedded",
             "caption1": c1,
@@ -135,5 +153,5 @@ async def main_async():
 
 if __name__ == "__main__":
     import nest_asyncio
-    nest_asyncio.apply()  # разрешаем повторное использование loop в Docker/Jupyter
+    nest_asyncio.apply()
     asyncio.run(main_async())
