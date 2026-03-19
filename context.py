@@ -1,29 +1,14 @@
 # context.py
-import os
-from supabase import create_client, Client
-
-SUPABASE_URL = os.getenv("SUPABASE_URL")
-SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-
-# создаём клиента Supabase
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-
-async def build_context(limit: int = 5) -> str:
-    """
-    Формирует контекст мемов для генерации подписей.
-    Возвращает строку с caption последних 'good_memes'.
-    """
+def build_context(limit: int = 5) -> str:
     try:
-        # execute() возвращает синхронный ответ, поэтому async не нужен
         resp = supabase.table("good_memes") \
             .select("caption, tags") \
             .order("score", desc=True) \
             .limit(limit) \
-            .execute()
+            .execute()  # синхронный вызов
 
         data = resp.data if resp.data else []
 
-        # формируем контекст
         lines = []
         for i, m in enumerate(data, 1):
             caption = m.get("caption", "").strip()[:120]
