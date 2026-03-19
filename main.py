@@ -17,10 +17,7 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 from supabase import create_client, Client
 
-url = "SUPABASE_URL"
-key = "SUPABASE_KEY"
-
-supabase: Client = create_client(url, key)
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 API_KEY = os.getenv("PROXYAPI_KEY")
