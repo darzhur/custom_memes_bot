@@ -1,27 +1,37 @@
-from supabase.client import AsyncClient
+# context.py
+import os
+from supabase import create_client, Client
 
-async def build_context(supabase: AsyncClient, limit: int = 5):
-    good = await supabase.table("good_memes")\
-        .select("caption, tags")\
-        .limit(limit)\
-        .execute()
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
-    memepedia = await supabase.table("memepedia")\
-        .select("title, content")\
-        .limit(limit)\
-        .execute()
+# создаём клиента Supabase
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
-    context = []
+async def build_context(limit: int = 5) -> str:
+    """
+    Формирует контекст мемов для генерации подписей.
+    Возвращает строку с caption последних 'good_memes'.
+    """
+    try:
+        # execute() возвращает синхронный ответ, поэтому async не нужен
+        resp = supabase.table("good_memes") \
+            .select("caption, tags") \
+            .order("score", desc=True) \
+            .limit(limit) \
+            .execute()
 
-    if good.data:
-        context.append("Примеры мемов:")
-        for m in good.data:
-            context.append(f"- {m['caption']} ({m.get('tags','')})")
+        data = resp.data if resp.data else []
 
-    if memepedia.data:
-        context.append("\nЗнания:")
-        for m in memepedia.data:
-            text = (m.get("content") or "")[:100]
-            context.append(f"- {m['title']}: {text}")
+        # формируем контекст
+        lines = []
+        for i, m in enumerate(data, 1):
+            caption = m.get("caption", "").strip()[:120]
+            tags = m.get("tags", "")
+            lines.append(f"{i}. {caption} ({tags})")
 
-    return "\n".join(context) or "сарказм, черный юмор"
+        return "\n".join(lines) if lines else "сарказм, черный юмор, дерзко"
+
+    except Exception as e:
+        print("Ошибка build_context:", e)
+        return "сарказм, черный юмор, дерзко"
