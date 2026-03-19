@@ -1,16 +1,16 @@
 # main.py
-from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
-from telegram import Update, Bot
 import os
 from dotenv import load_dotenv
+from telegram.ext import ApplicationBuilder, MessageHandler, ContextTypes, filters
+from telegram import Update, Bot
+import asyncio
+from supabase import create_client, Client
+from context import build_context
 from io import BytesIO
 from PIL import Image
-import traceback
-from context import build_context
-from supabase import create_client, Client
-import asyncio
 import base64
 import aiohttp
+import traceback
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -21,49 +21,19 @@ API_KEY = os.getenv("PROXYAPI_KEY")
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 # ----------------------------
-# Сбрасываем webhook до запуска polling
+# Сбрасываем webhook
 # ----------------------------
 async def reset_webhook():
     bot = Bot(token=TELEGRAM_TOKEN)
     await bot.delete_webhook(drop_pending_updates=True)
 
-# запускаем reset разово
-asyncio.run(reset_webhook())
-
 # ----------------------------
-# Вспомогательные функции
-# ----------------------------
-def build_meme_context(memes):
-    lines = []
-    for i, m in enumerate(memes, 1):
-        caption = m.get("caption", "").strip()
-        tags = m.get("tags", "")
-        caption = caption[:120]
-        lines.append(f"{i}. {caption} ({tags})")
-    return "\n".join(lines)
-
-async def fetch_good_memes(limit: int = 5):
-    try:
-        resp = supabase.table("good_memes")\
-            .select("caption, tags")\
-            .order("score", desc=True)\
-            .limit(limit)\
-            .execute()
-        if not resp.data:
-            return []
-        return resp.data
-    except Exception as e:
-        print("Ошибка получения good_memes:", e)
-        return []
-
-# ----------------------------
-# Основная функция обработки фото
+# Функция обработки фото
 # ----------------------------
 async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.photo:
         await update.message.reply_text("Это не фото 😅")
         return
-
     try:
         file = await update.message.photo[-1].get_file()
         bio = BytesIO()
@@ -75,15 +45,10 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         image_base64 = base64.b64encode(bio.getvalue()).decode()
         image_data_url = f"data:image/{img_format};base64,{image_base64}"
 
-        print("Image prepared, size:", len(image_base64))
-
-        # Контекст мемов
         meme_context = build_context(supabase)
         if not meme_context:
             meme_context = "сарказм, черный юмор, дерзко"
-        print("Контекст мемов:", meme_context)
 
-        # Запрос к ProxyAPI
         payload = {
             "model": "gpt-4o-mini",
             "messages": [
@@ -122,16 +87,11 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 json=payload,
                 headers=headers
             ) as resp:
-                status = resp.status
-                text = await resp.text()
-                print("ProxyAPI status:", status)
-                print("ProxyAPI response:", text[:500])
-                if status != 200:
+                if resp.status != 200:
                     await update.message.reply_text("Ошибка генерации 😅")
                     return
                 result = await resp.json()
 
-        # Извлекаем подписи
         captions_list = []
         choices = result.get("choices")
         if choices:
@@ -143,7 +103,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for caption in captions_list:
             await update.message.reply_text(caption)
 
-        # Сохраняем в Supabase
         c1, c2, c3 = (captions_list + ["", "", ""])[:3]
         supabase.table("generated_memes").insert({
             "title": "Мем с подписью",
@@ -159,18 +118,23 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Что-то сломалось 😅")
 
 # ----------------------------
-# Main
+# Основная асинхронная функция
 # ----------------------------
-def main():
+async def main_async():
+    # Сброс webhook
+    await reset_webhook()
+
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
 
     print("Бот запущен (polling)")
-    # run_polling сам создаёт loop, не трогаем asyncio
-    app.run_polling(
+    await app.run_polling(
         drop_pending_updates=True,
         allowed_updates=Update.ALL_TYPES
     )
 
+# ----------------------------
+# Точка входа
+# ----------------------------
 if __name__ == "__main__":
-    main()
+    asyncio.run(main_async())
