@@ -10,6 +10,7 @@ from PIL import Image
 import base64
 import aiohttp
 import traceback
+import asyncio
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
