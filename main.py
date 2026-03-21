@@ -24,19 +24,9 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # ----------------------------
 # Сбрасываем webhook
 # ----------------------------
-async def reset_webhook():
-    app = (
-        ApplicationBuilder()
-        .token(TELEGRAM_TOKEN)
-        .read_timeout(120)
-        .build()
-    )
-    # ----------------------------
-    # Сбрасываем webhook
-    # ----------------------------
-    async def reset_webhook(app):
-        # app уже содержит bot
-        await app.bot.delete_webhook(drop_pending_updates=True)
+async def reset_webhook(app):
+    # app уже содержит bot
+    await app.bot.delete_webhook(drop_pending_updates=True)
 
 # ----------------------------
 # Получаем случайные мемы из memepedia
