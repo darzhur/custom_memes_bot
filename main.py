@@ -31,7 +31,12 @@ async def reset_webhook():
         .read_timeout(120)
         .build()
     )
-    await bot.delete_webhook(drop_pending_updates=True)
+    # ----------------------------
+    # Сбрасываем webhook
+    # ----------------------------
+    async def reset_webhook(app):
+        # app уже содержит bot
+        await app.bot.delete_webhook(drop_pending_updates=True)
 
 # ----------------------------
 # Получаем случайные мемы из memepedia
@@ -107,7 +112,7 @@ async def main_async():
     app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
 
     # сброс webhook
-    await reset_webhook()
+    await reset_webhook(app)
 
     print("Бот запущен (polling)")
     await app.run_polling(
