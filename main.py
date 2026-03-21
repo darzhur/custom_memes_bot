@@ -10,6 +10,7 @@ import base64
 import aiohttp
 import traceback
 import asyncio
+from telegram.error import TimedOut
 import random
 
 load_dotenv()
@@ -24,7 +25,7 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Сбрасываем webhook
 # ----------------------------
 async def reset_webhook():
-    bot = Bot(token=TELEGRAM_TOKEN)
+    bot = Bot(token=TELEGRAM_TOKEN, read_timeout=120)
     await bot.delete_webhook(drop_pending_updates=True)
 
 # ----------------------------
@@ -49,98 +50,52 @@ async def build_random_context():
 # ----------------------------
 # Функция обработки фото
 # ----------------------------
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not update.message.photo:
-        await update.message.reply_text("Это не фото 😅")
-        return
-    try:
-        file = await update.message.photo[-1].get_file()
-        bio = BytesIO()
-        await file.download_to_memory(out=bio)
-        bio.seek(0)
-
-        img = Image.open(bio)
-        img_format = img.format.lower() if img.format else "jpeg"
-        image_base64 = base64.b64encode(bio.getvalue()).decode()
-        image_data_url = f"data:image/{img_format};base64,{image_base64}"
-
-        # --- Контекст мемов из случайных записей ---
-        meme_context = await build_random_context()
-
-        payload = {
-            "model": "gpt-4o-mini",
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": f"""
-Ты пишешь подписи к мемам.
-
-Стиль:
-- сарказм
-- черный юмор
-- дерзко
-- коротко (1 предложение)
-
-Примеры:
-{meme_context}
-
-Сделай 3 подписи (1,2,3).
-"""}, 
-                        {"type": "image_url", "image_url": {"url": image_data_url}}
-                    ]
-                }
-            ],
-            "max_tokens": 300
-        }
-
-        headers = {
-            "Authorization": f"Bearer {API_KEY}",
-            "Content-Type": "application/json"
-        }
-
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://api.proxyapi.ru/openai/v1/chat/completions",
-                json=payload,
-                headers=headers
-            ) as resp:
-                if resp.status != 200:
-                    await update.message.reply_text("Ошибка генерации 😅")
-                    return
-                result = await resp.json()
-
-        captions_list = []
-        choices = result.get("choices")
-        if choices:
-            content = choices[0].get("message", {}).get("content", "")
-            captions_list = [c.strip() for c in content.split("\n") if c.strip()]
-        if not captions_list:
-            captions_list = ["Не удалось сгенерировать подпись 😅"]
-
-        for caption in captions_list:
-            await update.message.reply_text(caption)
-
-        c1, c2, c3 = (captions_list + ["", "", ""])[:3]
-        await supabase.table("generated_memes").insert({
-            "title": "Мем с подписью",
-            "image_url": "base64_embedded",
-            "caption1": c1,
-            "caption2": c2,
-            "caption3": c3
-        }).execute()
-
-    except Exception:
-        print("ERROR in handle_photo:")
-        traceback.print_exc()
-        await update.message.reply_text("Что-то сломалось 😅")
-
+async def handle_photo(file, save_path=None, max_retries=3):
+    """
+    Скачивает файл Telegram с учётом таймаутов и повторов.
+    
+    :param file: объект telegram.File
+    :param save_path: если указано, сохраняем на диск по этому пути, иначе в память
+    :param max_retries: количество попыток при таймауте
+    :return: байты файла, если save_path=None
+    """
+    for attempt in range(1, max_retries + 1):
+        try:
+            if save_path:
+                # Скачиваем на диск
+                await file.download_to_drive(custom_path=save_path)
+                return save_path
+            else:
+                # Скачиваем в память
+                import io
+                bio = io.BytesIO()
+                await file.download_to_memory(out=bio)
+                bio.seek(0)
+                return bio
+        except TimedOut:
+            print(f"[handle_photo] Попытка {attempt} из {max_retries} — таймаут. Повтор через 2 сек.")
+            await asyncio.sleep(2)
+    raise TimedOut(f"Не удалось скачать файл после {max_retries} попыток")
 # ----------------------------
 # Основная функция
 # ----------------------------
 async def main_async():
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+# создаём бота с увеличенным таймаутом
+    bot = Bot(token=TELEGRAM_TOKEN, read_timeout=120)
+    app = ApplicationBuilder().bot(bot).build()
+
+    # добавляем хендлер-обёртку для фото
+    async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not update.message or not update.message.photo:
+            return
+        file = await update.message.photo[-1].get_file()
+        try:
+            bio = await handle_photo(file)  # или save_path="downloads/photo.jpg"
+            print("Фото скачано успешно")
+        except TimedOut:
+            print("Не удалось скачать фото после нескольких попыток")
+
+    app.add_handler(MessageHandler(filters.PHOTO, photo_handler))
 
     # сброс webhook
     await reset_webhook()
