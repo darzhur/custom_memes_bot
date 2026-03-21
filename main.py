@@ -12,7 +12,6 @@ import traceback
 import asyncio
 from telegram.error import TimedOut
 import random
-from telegram import Request
 
 load_dotenv()
 SUPABASE_URL = os.getenv("SUPABASE_URL")
@@ -26,14 +25,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 # Сбрасываем webhook
 # ----------------------------
 async def reset_webhook():
-    # создаём объект Request с таймаутом
-    request = Request(connect_timeout=10, read_timeout=120)  # можно увеличить время read_timeout
-
-    # создаём бота с этим Request
-    bot = Bot(token=TELEGRAM_TOKEN, request=request)
-
-    # передаём бот в приложение
-    app = ApplicationBuilder().bot(bot).build()
+    app = (
+        ApplicationBuilder()
+        .token(TELEGRAM_TOKEN)
+        .read_timeout(120)
+        .build()
+    )
     await bot.delete_webhook(drop_pending_updates=True)
 
 # ----------------------------
@@ -89,14 +86,12 @@ async def handle_photo(file, save_path=None, max_retries=3):
 # ----------------------------
 async def main_async():
 # создаём бота с увеличенным таймаутом
-    # создаём объект Request с таймаутом
-    request = Request(connect_timeout=10, read_timeout=120)  # можно увеличить время read_timeout
-
-    # создаём бота с этим Request
-    bot = Bot(token=TELEGRAM_TOKEN, request=request)
-
-    # передаём бот в приложение
-    app = ApplicationBuilder().bot(bot).build()
+    app = (
+        ApplicationBuilder()
+        .token(TELEGRAM_TOKEN)
+        .read_timeout(120)
+        .build()
+    )
 
     # добавляем хендлер-обёртку для фото
     async def photo_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
