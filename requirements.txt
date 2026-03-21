@@ -1,5 +1,6 @@
 python-dotenv==1.0.1
-python-telegram-bot[webhooks]
+# python-telegram-bot[webhooks]
+python-telegram-bot==20.3
 aiohttp>=3.9.7,<4.0.0
 Pillow==10.4.0
 supabase==2.0.0
